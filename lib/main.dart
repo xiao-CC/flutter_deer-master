@@ -2,12 +2,12 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_deer/demo/demo_page.dart';
-import 'package:flutter_deer/home/splash_page.dart';
 import 'package:flutter_deer/net/dio_utils.dart';
 import 'package:flutter_deer/net/intercept.dart';
 import 'package:flutter_deer/res/constant.dart';
 import 'package:flutter_deer/routers/not_found_page.dart';
 import 'package:flutter_deer/routers/routers.dart';
+import 'package:flutter_deer/sentinel/pages/enhanced_show_page.dart';
 import 'package:flutter_deer/setting/provider/locale_provider.dart';
 import 'package:flutter_deer/setting/provider/theme_provider.dart';
 import 'package:flutter_deer/util/device_utils.dart';
@@ -21,12 +21,9 @@ import 'package:url_strategy/url_strategy.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../l10n/deer_localizations.dart';
+import 'home/splash_page.dart';
 
 Future<void> main() async {
-//  debugProfileBuildsEnabled = true;
-//  debugPaintLayerBordersEnabled = true;
-//  debugProfilePaintsEnabled = true;
-//  debugRepaintRainbowEnabled = true;
   if (Constant.inProduction) {
     /// Release环境时不打印debugPrint内容
     debugPrint = (String? message, {int? wrapWidth}) {};
@@ -39,11 +36,6 @@ Future<void> main() async {
     if (Device.isDesktop) {
       await WindowManager.instance.ensureInitialized();
       windowManager.waitUntilReadyToShow().then((_) async {
-        /// 隐藏标题栏及操作按钮
-        // await windowManager.setTitleBarStyle(
-        //   TitleBarStyle.hidden,
-        //   windowButtonVisibility: false,
-        // );
         /// 设置桌面端窗口大小
         await windowManager.setSize(const Size(400, 800));
         await windowManager.setMinimumSize(const Size(400, 800));
@@ -124,9 +116,9 @@ class MyApp extends StatelessWidget {
 
       quickActions.setShortcutItems(<ShortcutItem>[
         const ShortcutItem(
-          type: 'demo',
-          localizedTitle: 'Demo',
-          icon: 'flutter_dash_black'
+            type: 'demo',
+            localizedTitle: 'Demo',
+            icon: 'flutter_dash_black'
         ),
       ]);
     }
@@ -140,7 +132,8 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LocaleProvider())
       ],
       child: Consumer2<ThemeProvider, LocaleProvider>(
-        builder: (_, ThemeProvider provider, LocaleProvider localeProvider, __) {
+        builder: (_, ThemeProvider provider, LocaleProvider localeProvider,
+            __) {
           return _buildMaterialApp(provider, localeProvider);
         },
       ),
@@ -148,27 +141,24 @@ class MyApp extends StatelessWidget {
 
     /// Toast 配置
     return OKToast(
-      backgroundColor: Colors.black54,
-      textPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-      radius: 20.0,
-      position: ToastPosition.bottom,
-      child: app
+        backgroundColor: Colors.black54,
+        textPadding: const EdgeInsets.symmetric(
+            horizontal: 16.0, vertical: 10.0),
+        radius: 20.0,
+        position: ToastPosition.bottom,
+        child: app
     );
   }
 
-  Widget _buildMaterialApp(ThemeProvider provider, LocaleProvider localeProvider) {
+  Widget _buildMaterialApp(ThemeProvider provider,
+      LocaleProvider localeProvider) {
     return MaterialApp(
       title: 'Flutter Deer',
-      // showPerformanceOverlay: true, //显示性能标签
-      // debugShowCheckedModeBanner: false, // 去除右上角debug的标签
-      // checkerboardRasterCacheImages: true,
-      // showSemanticsDebugger: true, // 显示语义视图
-      // checkerboardOffscreenLayers: true, // 检查离屏渲染
-
       theme: theme ?? provider.getTheme(),
       darkTheme: provider.getTheme(isDarkMode: true),
       themeMode: provider.getThemeMode(),
-      home: home ?? const SplashPage(),
+      // home: home ?? const SplashPage(),
+      home: home ?? _getHomePage(),
       onGenerateRoute: Routes.router.generator,
       localizationsDelegates: DeerLocalizations.localizationsDelegates,
       supportedLocales: DeerLocalizations.supportedLocales,
@@ -177,7 +167,8 @@ class MyApp extends StatelessWidget {
       builder: (BuildContext context, Widget? child) {
         /// 保证文字大小不受手机系统设置影响 https://www.kikt.top/posts/flutter/layout/dynamic-text/
         return MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+          data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.noScaling),
           child: child!,
         );
       },
@@ -190,5 +181,16 @@ class MyApp extends StatelessWidget {
       },
       restorationScopeId: 'app',
     );
+  }
+
+  Widget _getHomePage() {
+    final String? token = SpUtil.getString('auth_token');
+
+    if (token != null && token.isNotEmpty) {
+      // return const MainNavigationPage();
+      return const MobileEnhancedShowPage();
+    } else {
+      return const SplashPage();
+    }
   }
 }

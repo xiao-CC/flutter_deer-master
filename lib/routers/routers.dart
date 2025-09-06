@@ -8,6 +8,7 @@ import 'package:flutter_deer/login/login_router.dart';
 import 'package:flutter_deer/order/order_router.dart';
 import 'package:flutter_deer/routers/i_router.dart';
 import 'package:flutter_deer/routers/not_found_page.dart';
+import 'package:flutter_deer/sentinel/sentinel_router.dart';
 import 'package:flutter_deer/setting/setting_router.dart';
 import 'package:flutter_deer/shop/shop_router.dart';
 import 'package:flutter_deer/statistics/statistics_router.dart';
@@ -49,6 +50,7 @@ class Routes {
     _listRouter.add(AccountRouter());
     _listRouter.add(SettingRouter());
     _listRouter.add(StatisticsRouter());
+    _listRouter.add(SentinelRouter());
   
     /// 初始化路由
     void initRouter(IRouterProvider routerProvider) {
