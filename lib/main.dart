@@ -7,7 +7,7 @@ import 'package:flutter_deer/net/intercept.dart';
 import 'package:flutter_deer/res/constant.dart';
 import 'package:flutter_deer/routers/not_found_page.dart';
 import 'package:flutter_deer/routers/routers.dart';
-import 'package:flutter_deer/sentinel/pages/enhanced_show_page.dart';
+import 'package:flutter_deer/sentinel/pages/navigation_page.dart';
 import 'package:flutter_deer/setting/provider/locale_provider.dart';
 import 'package:flutter_deer/setting/provider/theme_provider.dart';
 import 'package:flutter_deer/util/device_utils.dart';
@@ -22,13 +22,14 @@ import 'package:window_manager/window_manager.dart';
 
 import '../../l10n/deer_localizations.dart';
 import 'home/splash_page.dart';
+import 'login/page/login_page.dart';
 
 Future<void> main() async {
   if (Constant.inProduction) {
     /// Release环境时不打印debugPrint内容
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
-  /// 异常处理
+
   handleError(() async {
     /// 确保初始化完成
     WidgetsFlutterBinding.ensureInitialized();
@@ -53,8 +54,9 @@ Future<void> main() async {
 
     /// sp初始化
     await SpUtil.getInstance();
+    await Device.initDeviceInfo();
 
-    /// 1.22 预览功能: 在输入频率与显示刷新率不匹配情况下提供平滑的滚动效果
+    /// 预览功能: 在输入频率与显示刷新率不匹配情况下提供平滑的滚动效果
     // GestureBinding.instance?.resamplingEnabled = true;
     runApp(MyApp());
   });
@@ -185,12 +187,10 @@ class MyApp extends StatelessWidget {
 
   Widget _getHomePage() {
     final String? token = SpUtil.getString('auth_token');
-
     if (token != null && token.isNotEmpty) {
-      // return const MainNavigationPage();
-      return const MobileEnhancedShowPage();
+      return const MainNavigationPage();
     } else {
-      return const SplashPage();
+      return const LoginPage();
     }
   }
 }

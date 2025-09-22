@@ -73,7 +73,6 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
       curve: Curves.easeInOut,
     );
 
-    // 在下一帧计算屏幕尺寸
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _calculatePanelDimensions();
     });

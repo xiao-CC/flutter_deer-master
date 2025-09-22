@@ -1,24 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_deer/login/widgets/my_text_field.dart';
-import 'package:flutter_deer/res/resources.dart';
 import 'package:flutter_deer/routers/fluro_navigator.dart';
 import 'package:flutter_deer/util/change_notifier_manage.dart';
-import 'package:flutter_deer/util/other_utils.dart';
-import 'package:flutter_deer/widgets/my_app_bar.dart';
-import 'package:flutter_deer/widgets/my_button.dart';
-import 'package:flutter_deer/widgets/my_scroll_view.dart';
 import 'package:sp_util/sp_util.dart';
 
-import '../../l10n/deer_localizations.dart';
-import '../../sentinel/pages/enhanced_show_page.dart';
 import '../../sentinel/sentinel_router.dart';
 import '../../services/auth_service.dart';
 import '../login_router.dart';
 
-/// design/1注册登录/index.html
 class LoginPage extends StatefulWidget {
-
   const LoginPage({super.key});
 
   @override
@@ -26,13 +16,14 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> with ChangeNotifierMixin<LoginPage> {
-  //定义一个controller
-  final TextEditingController _emailController = TextEditingController();  // 改为email
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _nodeText1 = FocusNode();
   final FocusNode _nodeText2 = FocusNode();
   bool _clickable = false;
-  bool _isLoading = false; // 添加加载状态
+  bool _isLoading = false;
+  bool _rememberMe = false;
+  bool _obscurePassword = true;
 
   @override
   Map<ChangeNotifier, List<VoidCallback>?>? changeNotifier() {
@@ -49,11 +40,10 @@ class _LoginPageState extends State<LoginPage> with ChangeNotifierMixin<LoginPag
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      /// 显示状态栏和导航栏
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom]);
     });
-    // 加载之前保存的邮箱
     _emailController.text = SpUtil.getString('saved_email') ?? '';
+    _rememberMe = SpUtil.getBool('remember_me') ?? false;
   }
 
   void _verify() {
@@ -61,17 +51,14 @@ class _LoginPageState extends State<LoginPage> with ChangeNotifierMixin<LoginPag
     final String password = _passwordController.text;
     bool clickable = true;
 
-    // 验证邮箱格式
     if (email.isEmpty || !AuthService.isValidEmail(email)) {
       clickable = false;
     }
 
-    // 验证密码长度
     if (password.isEmpty || password.length < 6) {
       clickable = false;
     }
 
-    /// 状态不一样再刷新，避免不必要的setState
     if (clickable != _clickable) {
       setState(() {
         _clickable = clickable;
@@ -81,7 +68,7 @@ class _LoginPageState extends State<LoginPage> with ChangeNotifierMixin<LoginPag
 
   void _login() async {
     if (_isLoading) {
-      return; // 防止重复点击
+      return;
     }
 
     setState(() {
@@ -90,13 +77,19 @@ class _LoginPageState extends State<LoginPage> with ChangeNotifierMixin<LoginPag
 
     try {
       final result = await AuthService.login(
-        email: _emailController.text,     // 改为email参数
+        email: _emailController.text,
         password: _passwordController.text,
       );
 
       if (result.success) {
+        if (_rememberMe) {
+          SpUtil.putString('saved_email', _emailController.text);
+          SpUtil.putBool('remember_me', true);
+        } else {
+          SpUtil.remove('saved_email');
+          SpUtil.putBool('remember_me', false);
+        }
 
-        // 显示成功消息
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -104,17 +97,14 @@ class _LoginPageState extends State<LoginPage> with ChangeNotifierMixin<LoginPag
               backgroundColor: Colors.green,
             ),
           );
-
           NavigatorUtils.push(context, SentinelRouter.navigationPage);
         }
       } else {
-        // 登录失败，显示错误信息
         if (mounted) {
           _showErrorDialog(result.message);
         }
       }
     } catch (e) {
-      // 处理未预期的错误
       if (mounted) {
         _showErrorDialog('登录过程中发生错误: ${e.toString()}');
       }
@@ -127,7 +117,6 @@ class _LoginPageState extends State<LoginPage> with ChangeNotifierMixin<LoginPag
     }
   }
 
-  // 显示错误对话框
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
@@ -149,81 +138,380 @@ class _LoginPageState extends State<LoginPage> with ChangeNotifierMixin<LoginPag
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: MyAppBar(
-        isBack: false,
-        actionName: DeerLocalizations.of(context)!.verificationCodeLogin,
-        onPressed: () {
-          NavigatorUtils.push(context, LoginRouter.smsLoginPage);
-        },
-      ),
-      body: MyScrollView(
-        keyboardConfig: Utils.getKeyboardActionsConfig(context, <FocusNode>[_nodeText1, _nodeText2]),
-        padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 20.0),
-        children: _buildBody,
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 30.0),
+          child: Column(
+            children: _buildBody,
+          ),
+        ),
       ),
     );
   }
 
   List<Widget> get _buildBody => <Widget>[
-    Text(
-      DeerLocalizations.of(context)!.passwordLogin,
-      style: TextStyles.textBold26,
-    ),
-    Gaps.vGap16,
-    MyTextField(
-      key: const Key('email'),              // 改为email key
-      focusNode: _nodeText1,
-      controller: _emailController,         // 改为email controller
-      maxLength: 50,                        // 邮箱长度限制调整
-      keyboardType: TextInputType.emailAddress,  // 改为邮箱键盘类型
-      hintText: '请输入邮箱地址',             // 修改提示文本
-    ),
-    Gaps.vGap8,
-    MyTextField(
-      key: const Key('password'),
-      keyName: 'password',
-      focusNode: _nodeText2,
-      isInputPwd: true,
-      controller: _passwordController,
-      keyboardType: TextInputType.visiblePassword,
-      hintText: DeerLocalizations.of(context)!.inputPasswordHint,
-    ),
-    Gaps.vGap24,
-    MyButton(
-      key: const Key('Login'),
-      onPressed: _clickable && !_isLoading ? _login : null,  // 加载时禁用按钮
-      text: _isLoading ? '登录中...' : DeerLocalizations.of(context)!.login,  // 显示加载状态
-    ),
-    MyButton(
-      key: const Key('weChatLogin'),
-      onPressed: () => NavigatorUtils.push(context, LoginRouter.weChatLoginPage),
-      text: DeerLocalizations.of(context)!.weChatLogin,
-    ),
+    const SizedBox(height: 60),
+
+    // 头像
     Container(
-      height: 40.0,
-      alignment: Alignment.centerRight,
-      child: GestureDetector(
-        child: Text(
-          DeerLocalizations.of(context)!.forgotPasswordLink,
-          key: const Key('forgotPassword'),
-          style: Theme.of(context).textTheme.titleSmall,
+      width: 80,
+      height: 80,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
         ),
-        onTap: () => NavigatorUtils.push(context, LoginRouter.resetPasswordPage),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2563EB).withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: const Icon(
+        Icons.person,
+        size: 40,
+        color: Colors.white,
       ),
     ),
-    Gaps.vGap16,
-    Container(
-        alignment: Alignment.center,
-        child: GestureDetector(
-          child: Text(
-            DeerLocalizations.of(context)!.noAccountRegisterLink,
-            key: const Key('noAccountRegister'),
-            style: TextStyle(
-                color: Theme.of(context).primaryColor
+
+    const SizedBox(height: 20),
+
+    // 欢迎回来文字
+    const Text(
+      '欢迎回来',
+      style: TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF1F2937),
+      ),
+    ),
+
+    const SizedBox(height: 40),
+
+    // 邮箱输入框
+    _buildInputContainer(
+      child: TextField(
+        key: const Key('email'),
+        controller: _emailController,
+        focusNode: _nodeText1,
+        style: const TextStyle(
+          color: Color(0xFF1F2937),
+          fontSize: 16,
+        ),
+        decoration: InputDecoration(
+          hintText: '请输入邮箱',
+          hintStyle: TextStyle(
+            color: Colors.grey[400],
+            fontSize: 16,
+          ),
+          border: InputBorder.none,
+          prefixIcon: const Icon(
+            Icons.email_outlined,
+            color: Color(0xFF6B7280),
+            size: 20,
+          ),
+          counterText: '',
+        ),
+        keyboardType: TextInputType.emailAddress,
+        maxLength: 50,
+      ),
+    ),
+
+    const SizedBox(height: 16),
+
+    // 密码输入框
+    _buildInputContainer(
+      child: TextField(
+        key: const Key('password'),
+        controller: _passwordController,
+        focusNode: _nodeText2,
+        obscureText: _obscurePassword,
+        style: const TextStyle(
+          color: Color(0xFF1F2937),
+          fontSize: 16,
+        ),
+        decoration: InputDecoration(
+          hintText: '请输入密码',
+          hintStyle: TextStyle(
+            color: Colors.grey[400],
+            fontSize: 16,
+          ),
+          border: InputBorder.none,
+          prefixIcon: const Icon(
+            Icons.lock_outline,
+            color: Color(0xFF6B7280),
+            size: 20,
+          ),
+          suffixIcon: GestureDetector(
+            onTap: () {
+              setState(() {
+                _obscurePassword = !_obscurePassword;
+              });
+            },
+            child: Icon(
+              _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+              color: const Color(0xFF9CA3AF),
+              size: 20,
             ),
           ),
-          onTap: () => NavigatorUtils.push(context, LoginRouter.registerPage),
-        )
-    )
+        ),
+        keyboardType: TextInputType.visiblePassword,
+      ),
+    ),
+
+    const SizedBox(height: 20),
+
+    // 记住我
+    Row(
+      children: [
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _rememberMe = !_rememberMe;
+            });
+          },
+          child: Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: _rememberMe ? const Color(0xFF2563EB) : Colors.transparent,
+              border: Border.all(
+                color: _rememberMe ? const Color(0xFF2563EB) : const Color(0xFFD1D5DB),
+                width: 2,
+              ),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: _rememberMe
+                ? const Icon(
+              Icons.check,
+              size: 12,
+              color: Colors.white,
+            )
+                : null,
+          ),
+        ),
+        const SizedBox(width: 8),
+        const Text(
+          '记住我',
+          style: TextStyle(
+            color: Color(0xFF6B7280),
+            fontSize: 14,
+          ),
+        ),
+      ],
+    ),
+
+    const SizedBox(height: 30),
+
+    // 登录按钮
+    Container(
+      width: double.infinity,
+      height: 50,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: _clickable && !_isLoading
+              ? [const Color(0xFF2563EB), const Color(0xFF1D4ED8)]
+              : [const Color(0xFFD1D5DB), const Color(0xFFD1D5DB)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: _clickable && !_isLoading
+            ? [
+          BoxShadow(
+            color: const Color(0xFF2563EB).withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          ),
+        ]
+            : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _clickable && !_isLoading ? _login : null,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            alignment: Alignment.center,
+            child: _isLoading
+                ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                strokeWidth: 2,
+              ),
+            )
+                : const Text(
+              '登录',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+
+    const SizedBox(height: 20),
+
+    // 忘记密码
+    GestureDetector(
+      onTap: () => NavigatorUtils.push(context, LoginRouter.resetPasswordPage),
+      child: const Text(
+        '忘记密码？',
+        key: Key('forgotPassword'),
+        style: TextStyle(
+          color: Color(0xFF2563EB),
+          fontSize: 14,
+        ),
+      ),
+    ),
+
+    const SizedBox(height: 40),
+
+    // 分割线
+    Row(
+      children: [
+        Expanded(
+          child: Container(
+            height: 1,
+            color: const Color(0xFFE5E7EB),
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            '或使用其他方式登录',
+            style: TextStyle(
+              color: Color(0xFF9CA3AF),
+              fontSize: 14,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Container(
+            height: 1,
+            color: const Color(0xFFE5E7EB),
+          ),
+        ),
+      ],
+    ),
+
+    const SizedBox(height: 30),
+
+    // 第三方登录图标
+    Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // 微信登录
+        _buildSocialButton(
+          key: const Key('weChatLogin'),
+          icon: Icons.wechat,
+          color: const Color(0xFF07C160),
+          onTap: () => NavigatorUtils.push(context, LoginRouter.weChatLoginPage),
+        ),
+
+        const SizedBox(width: 16),
+
+        // QQ登录
+        _buildSocialButton(
+          icon: Icons.person,
+          color: const Color(0xFF12B7F5),
+          onTap: () {
+            // QQ登录逻辑
+          },
+        ),
+
+        const SizedBox(width: 16),
+
+        // Apple登录
+        _buildSocialButton(
+          icon: Icons.apple,
+          color: const Color(0xFF1F2937),
+          onTap: () {
+            // Apple登录逻辑
+          },
+        ),
+      ],
+    ),
+
+    const SizedBox(height: 50),
+
+    // 注册链接
+    GestureDetector(
+      key: const Key('noAccountRegister'),
+      onTap: () => NavigatorUtils.push(context, LoginRouter.registerPage),
+      child: RichText(
+        text: const TextSpan(
+          style: TextStyle(
+            fontSize: 14,
+            color: Color(0xFF6B7280),
+          ),
+          children: [
+            TextSpan(text: '还没有账号？'),
+            TextSpan(
+              text: '立即注册',
+              style: TextStyle(
+                color: Color(0xFF2563EB),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+
+    const SizedBox(height: 40),
   ];
+
+  Widget _buildInputContainer({required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        border: Border.all(
+          color: const Color(0xFFE9ECEF),
+          width: 2,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildSocialButton({
+    Key? key,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      key: key,
+      onTap: onTap,
+      child: Container(
+        width: 50,
+        height: 50,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(
+            color: const Color(0xFFE5E7EB),
+            width: 2,
+          ),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          icon,
+          color: color,
+          size: 20,
+        ),
+      ),
+    );
+  }
 }

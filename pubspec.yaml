@@ -31,8 +31,6 @@ dependencies:
   sp_util: 2.0.3
   # Flutter 常用工具类库 https://github.com/Sky24n/flustars
   flustars_flutter3: ^3.0.0 # flustars很久不维护，可以使用这个替代
-  # Flutter 轮播图 https://github.com/mdddj/flutter_swiper_null_safety
-  flutter_swiper_null_safety_flutter3: ^4.0.3   # flutter_swiper很久不维护，可以使用这个替代
   # 启动URL的插件（支持Web） https://github.com/flutter/packages/tree/main/packages/url_launcher
   url_launcher: 6.3.0
   # 图片选择插件 https://github.com/flutter/packages/tree/main/packages/image_picker
@@ -83,6 +81,7 @@ dependencies:
   flutter_map: ^5.0.0
   latlong2: ^0.9.0
   flutter_dotenv: ^5.1.0 # 用于管理环境变量
+  flutter_launcher_icons: ^0.13.1
 
 # https://github.com/simplezhli/flutter_deer/issues/187
 dependency_overrides:
@@ -98,11 +97,9 @@ dev_dependencies:
     sdk: flutter
   integration_test:
     sdk: flutter
-  # 黄金测试
-#  flutter_goldens:
-#    sdk: flutter
   # 单元测试
   test: ^1.16.8
+
   flutter_lints: ^2.0.0
 
 # For information on the generic Dart part of this file, see the
@@ -129,7 +126,6 @@ flutter:
     - assets/images/shop/
     - assets/images/account/
     - assets/images/statistic/
-    - assets/lottie/
 
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a
@@ -143,3 +139,9 @@ flutter:
 
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/mylogo.png"
+  adaptive_icon_background: "#FF5722"
+  adaptive_icon_foreground: "assets/images/mylogo.png"

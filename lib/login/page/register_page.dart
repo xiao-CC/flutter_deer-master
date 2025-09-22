@@ -11,9 +11,7 @@ import 'package:flutter_deer/widgets/my_scroll_view.dart';
 import '../../l10n/deer_localizations.dart';
 import '../../services/register_service.dart';
 
-/// design/1注册登录/index.html#artboard11
 class RegisterPage extends StatefulWidget {
-
   const RegisterPage({super.key});
 
   @override
@@ -21,7 +19,6 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<RegisterPage> {
-  // 定义控制器
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -37,6 +34,8 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
   bool _clickable = false;
   bool _isLoading = false;
   bool _isCodeSending = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   Map<ChangeNotifier, List<VoidCallback>?>? changeNotifier() {
@@ -64,27 +63,22 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
 
     bool clickable = true;
 
-    // 验证邮箱
     if (email.isEmpty || !RegisterService.isValidEmail(email)) {
       clickable = false;
     }
 
-    // 验证用户名
     if (username.isEmpty || !RegisterService.isValidUsername(username)) {
       clickable = false;
     }
 
-    // 验证密码
     if (password.isEmpty || !RegisterService.isValidPassword(password)) {
       clickable = false;
     }
 
-    // 验证确认密码
     if (confirmPassword.isEmpty || password != confirmPassword) {
       clickable = false;
     }
 
-    // 验证验证码
     if (vCode.isEmpty || vCode.length < 6) {
       clickable = false;
     }
@@ -96,7 +90,6 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
     }
   }
 
-  // 发送验证码
   Future<bool> _sendVerificationCode() async {
     if (_isCodeSending) return false;
 
@@ -134,7 +127,7 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
 
   void _register() async {
     if (_isLoading) {
-      return; // 防止重复点击
+      return;
     }
 
     setState(() {
@@ -151,18 +144,15 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
       );
 
       if (result.success) {
-        // 注册成功
         if (mounted) {
           _showSuccessDialog(result.message);
         }
       } else {
-        // 注册失败
         if (mounted) {
           _showErrorDialog(result.message);
         }
       }
     } catch (e) {
-      // 处理未预期的错误
       if (mounted) {
         _showErrorDialog('注册过程中发生错误: ${e.toString()}');
       }
@@ -175,22 +165,73 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
     }
   }
 
-  // 显示成功对话框
   void _showSuccessDialog(String message) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('注册成功'),
-          content: Text(message),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          title: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF10B981),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                '注册成功',
+                style: TextStyle(
+                  color: Color(0xFF1F2937),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            message,
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 14,
+            ),
+          ),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                NavigatorUtils.goBack(context); // 返回登录页面
-              },
-              child: const Text('去登录'),
+            Container(
+              width: double.infinity,
+              height: 44,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  NavigatorUtils.goBack(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  '去登录',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             ),
           ],
         );
@@ -198,18 +239,69 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
     );
   }
 
-  // 显示错误对话框
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('注册失败'),
-          content: Text(message),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          title: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEF4444),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.close,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                '注册失败',
+                style: TextStyle(
+                  color: Color(0xFF1F2937),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            message,
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 14,
+            ),
+          ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('确定'),
+            Container(
+              width: double.infinity,
+              height: 44,
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6B7280),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  '确定',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             ),
           ],
         );
@@ -220,120 +312,370 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: MyAppBar(
-        title: DeerLocalizations.of(context)!.register,
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF1F2937)),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          '注册',
+          style: TextStyle(
+            color: Color(0xFF1F2937),
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
-      body: MyScrollView(
-        keyboardConfig: Utils.getKeyboardActionsConfig(context, <FocusNode>[
-          _nodeText1, _nodeText2, _nodeText3, _nodeText4, _nodeText5
-        ]),
-        crossAxisAlignment: CrossAxisAlignment.center,
-        padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 20.0),
-        children: _buildBody(),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 30.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: _buildBody(),
+          ),
+        ),
       ),
     );
   }
 
   List<Widget> _buildBody() {
     return <Widget>[
-      Text(
-        DeerLocalizations.of(context)!.openYourAccount,
-        style: TextStyles.textBold26,
+      const SizedBox(height: 40),
+
+      // 页面标题
+      const Text(
+        '注册你的账户',
+        style: TextStyle(
+          fontSize: 28,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF1F2937),
+        ),
       ),
-      Gaps.vGap16,
+
+      const SizedBox(height: 8),
+
+      Text(
+        '创建一个新账户，开始您的旅程',
+        style: TextStyle(
+          fontSize: 14,
+          color: Colors.grey[600],
+        ),
+      ),
+
+      const SizedBox(height: 40),
 
       // 邮箱输入框
-      MyTextField(
-        key: const Key('email'),
-        focusNode: _nodeText1,
-        controller: _emailController,
-        maxLength: 50,
-        keyboardType: TextInputType.emailAddress,
-        hintText: '请输入邮箱地址',
+      _buildInputContainer(
+        child: TextField(
+          key: const Key('email'),
+          controller: _emailController,
+          focusNode: _nodeText1,
+          style: const TextStyle(
+            color: Color(0xFF1F2937),
+            fontSize: 16,
+          ),
+          decoration: InputDecoration(
+            hintText: '请输入邮箱地址',
+            hintStyle: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 16,
+            ),
+            border: InputBorder.none,
+            prefixIcon: const Icon(
+              Icons.email_outlined,
+              color: Color(0xFF6B7280),
+              size: 20,
+            ),
+            counterText: '',
+          ),
+          keyboardType: TextInputType.emailAddress,
+          maxLength: 50,
+        ),
       ),
-      Gaps.vGap8,
+
+      const SizedBox(height: 16),
 
       // 用户名输入框
-      MyTextField(
-        key: const Key('username'),
-        focusNode: _nodeText2,
-        controller: _usernameController,
-        maxLength: 20,
-        keyboardType: TextInputType.text,
-        hintText: '请输入用户名（3-20位字母数字下划线）',
+      _buildInputContainer(
+        child: TextField(
+          key: const Key('username'),
+          controller: _usernameController,
+          focusNode: _nodeText2,
+          style: const TextStyle(
+            color: Color(0xFF1F2937),
+            fontSize: 16,
+          ),
+          decoration: InputDecoration(
+            hintText: '请输入用户名（3-20位字母数字下划线）',
+            hintStyle: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 16,
+            ),
+            border: InputBorder.none,
+            prefixIcon: const Icon(
+              Icons.person_outline,
+              color: Color(0xFF6B7280),
+              size: 20,
+            ),
+            counterText: '',
+          ),
+          keyboardType: TextInputType.text,
+          maxLength: 20,
+        ),
       ),
-      Gaps.vGap8,
+
+      const SizedBox(height: 16),
 
       // 密码输入框
-      MyTextField(
-        key: const Key('password'),
-        keyName: 'password',
-        focusNode: _nodeText3,
-        isInputPwd: true,
-        controller: _passwordController,
-        keyboardType: TextInputType.visiblePassword,
-        hintText: '请输入密码（至少8位，包含字母和数字）',
+      _buildInputContainer(
+        child: TextField(
+          key: const Key('password'),
+          controller: _passwordController,
+          focusNode: _nodeText3,
+          obscureText: _obscurePassword,
+          style: const TextStyle(
+            color: Color(0xFF1F2937),
+            fontSize: 16,
+          ),
+          decoration: InputDecoration(
+            hintText: '请输入密码（至少8位，包含字母和数字）',
+            hintStyle: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 16,
+            ),
+            border: InputBorder.none,
+            prefixIcon: const Icon(
+              Icons.lock_outline,
+              color: Color(0xFF6B7280),
+              size: 20,
+            ),
+            suffixIcon: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _obscurePassword = !_obscurePassword;
+                });
+              },
+              child: Icon(
+                _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                color: const Color(0xFF9CA3AF),
+                size: 20,
+              ),
+            ),
+          ),
+          keyboardType: TextInputType.visiblePassword,
+        ),
       ),
-      Gaps.vGap8,
+
+      const SizedBox(height: 16),
 
       // 确认密码输入框
-      MyTextField(
-        key: const Key('confirmPassword'),
-        keyName: 'confirmPassword',
-        focusNode: _nodeText4,
-        isInputPwd: true,
-        controller: _confirmPasswordController,
-        keyboardType: TextInputType.visiblePassword,
-        hintText: '请再次输入密码',
+      _buildInputContainer(
+        child: TextField(
+          key: const Key('confirmPassword'),
+          controller: _confirmPasswordController,
+          focusNode: _nodeText4,
+          obscureText: _obscureConfirmPassword,
+          style: const TextStyle(
+            color: Color(0xFF1F2937),
+            fontSize: 16,
+          ),
+          decoration: InputDecoration(
+            hintText: '请再次输入密码',
+            hintStyle: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 16,
+            ),
+            border: InputBorder.none,
+            prefixIcon: const Icon(
+              Icons.lock_outline,
+              color: Color(0xFF6B7280),
+              size: 20,
+            ),
+            suffixIcon: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _obscureConfirmPassword = !_obscureConfirmPassword;
+                });
+              },
+              child: Icon(
+                _obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                color: const Color(0xFF9CA3AF),
+                size: 20,
+              ),
+            ),
+          ),
+          keyboardType: TextInputType.visiblePassword,
+        ),
       ),
-      Gaps.vGap8,
+
+      const SizedBox(height: 16),
 
       // 验证码输入框
-      MyTextField(
-        key: const Key('vcode'),
-        focusNode: _nodeText5,
-        controller: _vCodeController,
-        keyboardType: TextInputType.number,
-        getVCode: _sendVerificationCode,
-        maxLength: 6,
-        hintText: '请输入验证码',
+      _buildInputContainer(
+        child: TextField(
+          key: const Key('vcode'),
+          controller: _vCodeController,
+          focusNode: _nodeText5,
+          style: const TextStyle(
+            color: Color(0xFF1F2937),
+            fontSize: 16,
+          ),
+          decoration: InputDecoration(
+            hintText: '请输入验证码',
+            hintStyle: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 16,
+            ),
+            border: InputBorder.none,
+            prefixIcon: const Icon(
+              Icons.verified_user_outlined,
+              color: Color(0xFF6B7280),
+              size: 20,
+            ),
+            suffixIcon: Container(
+              margin: const EdgeInsets.all(8),
+              child: ElevatedButton(
+                onPressed: _isCodeSending ? null : _sendVerificationCode,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _isCodeSending ? Colors.grey[300] : const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  minimumSize: const Size(80, 32),
+                ),
+                child: _isCodeSending
+                    ? const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+                    : const Text(
+                  '发送',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ),
+            counterText: '',
+          ),
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+        ),
       ),
-      Gaps.vGap24,
+
+      const SizedBox(height: 30),
 
       // 注册按钮
-      MyButton(
-        key: const Key('register'),
-        onPressed: _clickable && !_isLoading ? _register : null,
-        text: _isLoading ? '注册中...' : DeerLocalizations.of(context)!.register,
+      Container(
+        width: double.infinity,
+        height: 50,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: _clickable && !_isLoading
+                ? [const Color(0xFF2563EB), const Color(0xFF1D4ED8)]
+                : [const Color(0xFFD1D5DB), const Color(0xFFD1D5DB)],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: _clickable && !_isLoading
+              ? [
+            BoxShadow(
+              color: const Color(0xFF2563EB).withOpacity(0.3),
+              blurRadius: 15,
+              offset: const Offset(0, 4),
+            ),
+          ]
+              : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _clickable && !_isLoading ? _register : null,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              alignment: Alignment.center,
+              child: _isLoading
+                  ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  strokeWidth: 2,
+                ),
+              )
+                  : const Text(
+                '注册',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
 
-      Gaps.vGap16,
+      const SizedBox(height: 30),
 
       // 密码要求说明
       Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FA),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFE9ECEF),
+            width: 1,
+          ),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               '密码要求：',
               style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).textTheme.bodySmall?.color,
-                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: Color(0xFF1F2937),
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text(
-              '• 至少8位字符\n• 必须包含字母和数字',
+              '• 至少8位字符\n• 必须包含字母和数字\n• 用户名只能包含字母、数字和下划线\n• 用户名长度为3-20位',
               style: TextStyle(
-                fontSize: 11,
-                color: Theme.of(context).textTheme.bodySmall?.color,
+                fontSize: 13,
+                color: Colors.grey[600],
+                height: 1.4,
               ),
             ),
           ],
         ),
       ),
+
+      const SizedBox(height: 40),
     ];
+  }
+
+  Widget _buildInputContainer({required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        border: Border.all(
+          color: const Color(0xFFE9ECEF),
+          width: 2,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: child,
+    );
   }
 }
