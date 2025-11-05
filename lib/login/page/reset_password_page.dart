@@ -1,13 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_deer/login/widgets/my_text_field.dart';
-import 'package:flutter_deer/res/resources.dart';
 import 'package:flutter_deer/util/change_notifier_manage.dart';
-import 'package:flutter_deer/util/other_utils.dart';
 import 'package:flutter_deer/util/toast_utils.dart';
-import 'package:flutter_deer/widgets/my_app_bar.dart';
-import 'package:flutter_deer/widgets/my_button.dart';
-import 'package:flutter_deer/widgets/my_scroll_view.dart';
-import '../../l10n/deer_localizations.dart';
 import '../../services/reset_password_service.dart';
 
 class ResetPasswordPage extends StatefulWidget {
@@ -33,6 +27,11 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> with ChangeNotifi
   bool _isCodeSending = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+
+  // 验证码倒计时相关
+  Timer? _countdownTimer;
+  int _countdown = 0;
+  static const int _maxCountdown = 600;
 
   @override
   Map<ChangeNotifier, List<VoidCallback>?>? changeNotifier() {
@@ -81,6 +80,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> with ChangeNotifi
   }
 
   Future<bool> _sendVerificationCode() async {
+    if (_isCodeSending || _countdown > 0) return false;
+
     final String email = _emailController.text;
 
     if (email.isEmpty) {
@@ -100,6 +101,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> with ChangeNotifi
     try {
       await PasswordResetService.sendVerificationCode(email);
       Toast.show('验证码已发送，请查收邮件');
+      // 启动倒计时
+      _startCountdown();
       return true;
     } catch (e) {
       Toast.show('发送验证码失败：${e.toString()}');
@@ -111,6 +114,37 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> with ChangeNotifi
         });
       }
     }
+  }
+
+  // 启动倒计时
+  void _startCountdown() {
+    setState(() {
+      _countdown = _maxCountdown;
+    });
+
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      setState(() {
+        if (_countdown > 0) {
+          _countdown--;
+        } else {
+          _countdownTimer?.cancel();
+          _countdownTimer = null;
+        }
+      });
+    });
+  }
+
+  // 格式化倒计时显示
+  String _formatCountdown() {
+    final minutes = _countdown ~/ 60;
+    final seconds = _countdown % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}后再试';
   }
 
   void _resetPassword() async {
@@ -284,9 +318,11 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> with ChangeNotifi
             suffixIcon: Container(
               margin: const EdgeInsets.all(8),
               child: ElevatedButton(
-                onPressed: _isCodeSending ? null : _sendVerificationCode,
+                onPressed: (_isCodeSending || _countdown > 0) ? null : _sendVerificationCode,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _isCodeSending ? Colors.grey[300] : const Color(0xFF2563EB),
+                  backgroundColor: (_isCodeSending || _countdown > 0)
+                      ? Colors.grey[300]
+                      : const Color(0xFF2563EB),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -303,9 +339,9 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> with ChangeNotifi
                     valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 )
-                    : const Text(
-                  '发送',
-                  style: TextStyle(fontSize: 12),
+                    : Text(
+                  _countdown > 0 ? _formatCountdown() : '发送',
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
             ),
@@ -509,6 +545,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> with ChangeNotifi
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
     _emailController.dispose();
     _vCodeController.dispose();
     _passwordController.dispose();

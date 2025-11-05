@@ -60,7 +60,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
       case 1:
       // 地图页面的AppBar
         return AppBar(
-          title: const Text("前瞻一号影像 + 多源卫星搜索"),
+          title: const Text("影像搜索"),
           centerTitle: true,
           backgroundColor: Colors.blue,
           foregroundColor: Colors.white,

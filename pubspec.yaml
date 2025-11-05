@@ -82,6 +82,7 @@ dependencies:
   latlong2: ^0.9.0
   flutter_dotenv: ^5.1.0 # 用于管理环境变量
   flutter_launcher_icons: ^0.13.1
+  file_picker: ^8.0.0+1
 
 # https://github.com/simplezhli/flutter_deer/issues/187
 dependency_overrides:
@@ -99,18 +100,11 @@ dev_dependencies:
     sdk: flutter
   # 单元测试
   test: ^1.16.8
-
   flutter_lints: ^2.0.0
 
-# For information on the generic Dart part of this file, see the
-# following page: https:/w.dartlang.org/tools/pub/pubspec
 
-# The following section is specific to Flutter.
 flutter:
   generate: true
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
   uses-material-design: true
 
   assets:
@@ -127,18 +121,12 @@ flutter:
     - assets/images/account/
     - assets/images/statistic/
 
-  # To add custom fonts to your application, add a fonts section here,
-  # in this "flutter" section. Each entry in this list should have a
-  # "family" key with the font family name, and a "fonts" key with a
-  # list giving the asset and other descriptors for the font. For
-  # example:
   fonts:
     - family: RobotoThin
       fonts:
         - asset: assets/fonts/Roboto-Thin.ttf
 
-  # For details regarding fonts from package dependencies,
-  # see https://flutter.dev/custom-fonts/#from-packages
+
 flutter_icons:
   android: true
   ios: true

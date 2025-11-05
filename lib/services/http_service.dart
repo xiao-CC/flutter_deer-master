@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:sp_util/sp_util.dart';
 
 class HttpService {
-  static const String baseUrl = 'http://39.103.98.255:6004';
+  static const String baseUrl = 'http://39.103.98.255:6002';
   static const Duration timeoutDuration = Duration(seconds: 30);
 
   // 获取Headers

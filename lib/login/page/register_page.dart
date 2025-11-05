@@ -1,14 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_deer/login/widgets/my_text_field.dart';
-import 'package:flutter_deer/res/resources.dart';
 import 'package:flutter_deer/routers/fluro_navigator.dart';
 import 'package:flutter_deer/util/change_notifier_manage.dart';
-import 'package:flutter_deer/util/other_utils.dart';
 import 'package:flutter_deer/util/toast_utils.dart';
-import 'package:flutter_deer/widgets/my_app_bar.dart';
-import 'package:flutter_deer/widgets/my_button.dart';
-import 'package:flutter_deer/widgets/my_scroll_view.dart';
-import '../../l10n/deer_localizations.dart';
 import '../../services/register_service.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -36,6 +30,11 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
   bool _isCodeSending = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+
+  // 验证码倒计时相关
+  Timer? _countdownTimer;
+  int _countdown = 0;
+  static const int _maxCountdown = 600;
 
   @override
   Map<ChangeNotifier, List<VoidCallback>?>? changeNotifier() {
@@ -91,7 +90,7 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
   }
 
   Future<bool> _sendVerificationCode() async {
-    if (_isCodeSending) return false;
+    if (_isCodeSending || _countdown > 0) return false;
 
     final email = _emailController.text;
     if (!RegisterService.isValidEmail(email)) {
@@ -105,9 +104,10 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
 
     try {
       final result = await RegisterService.sendRegisterCode(email: email);
-
       if (result.success) {
         Toast.show(result.message);
+        // 启动倒计时
+        _startCountdown();
         return true;
       } else {
         Toast.show(result.message);
@@ -123,6 +123,37 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
         });
       }
     }
+  }
+
+  // 启动倒计时
+  void _startCountdown() {
+    setState(() {
+      _countdown = _maxCountdown;
+    });
+
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      setState(() {
+        if (_countdown > 0) {
+          _countdown--;
+        } else {
+          _countdownTimer?.cancel();
+          _countdownTimer = null;
+        }
+      });
+    });
+  }
+
+  // 格式化倒计时显示
+  String _formatCountdown() {
+    final minutes = _countdown ~/ 60;
+    final seconds = _countdown % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}后再试';
   }
 
   void _register() async {
@@ -538,9 +569,11 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
             suffixIcon: Container(
               margin: const EdgeInsets.all(8),
               child: ElevatedButton(
-                onPressed: _isCodeSending ? null : _sendVerificationCode,
+                onPressed: (_isCodeSending || _countdown > 0) ? null : _sendVerificationCode,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _isCodeSending ? Colors.grey[300] : const Color(0xFF2563EB),
+                  backgroundColor: (_isCodeSending || _countdown > 0)
+                      ? Colors.grey[300]
+                      : const Color(0xFF2563EB),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -557,9 +590,9 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
                     valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 )
-                    : const Text(
-                  '发送',
-                  style: TextStyle(fontSize: 12),
+                    : Text(
+                  _countdown > 0 ? _formatCountdown() : '发送',
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
             ),
@@ -663,6 +696,13 @@ class _RegisterPageState extends State<RegisterPage> with ChangeNotifierMixin<Re
 
       const SizedBox(height: 40),
     ];
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+    super.dispose();
   }
 
   Widget _buildInputContainer({required Widget child}) {

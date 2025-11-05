@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -14,6 +15,15 @@ class MobileSentinelSearchPanel extends StatefulWidget {
   final Set<String> visibleImages;
   final VoidCallback onClosePanel;
 
+  // 地图打点相关回调
+  final VoidCallback onTogglePolygonMode;
+  final VoidCallback onClearPolygonPoints;
+  final VoidCallback onUsePolygonAsGeoJson;
+  final bool isPolygonMode;
+  final int polygonPointsCount;
+  final bool hasValidPolygon;
+  final String? polygonGeoJson; // 从多边形点生成的GeoJSON
+
   const MobileSentinelSearchPanel({
     super.key,
     required this.onSearch,
@@ -22,6 +32,14 @@ class MobileSentinelSearchPanel extends StatefulWidget {
     required this.onToggleImage,
     required this.visibleImages,
     required this.onClosePanel,
+    // 地图打点相关参数
+    required this.onTogglePolygonMode,
+    required this.onClearPolygonPoints,
+    required this.onUsePolygonAsGeoJson,
+    required this.isPolygonMode,
+    required this.polygonPointsCount,
+    required this.hasValidPolygon,
+    this.polygonGeoJson,
   });
 
   @override
@@ -42,6 +60,10 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
 
   // 数据类型选择
   Set<SatelliteDataType> _selectedDataTypes = {SatelliteDataType.sentinel2L2A};
+
+  // 文件导入相关状态
+  String? _loadedFileName;
+  bool _isFileLoaded = false;
 
   @override
   void initState() {
@@ -65,25 +87,18 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
     _endDateController.text = '${_endDate.year}-${_endDate.month.toString().padLeft(2, '0')}-${_endDate.day.toString().padLeft(2, '0')}';
   }
 
-  void _fillSampleGeoJSON() {
-    const sampleGeoJSON = {
-      "type": "Feature",
-      "properties": {},
-      "geometry": {
-        "coordinates": [
-          [
-            [121.61368646673998, 44.101992702134],
-            [121.60504914997375, 43.99855484106067],
-            [121.79737384655414, 43.99202124189398],
-            [121.7946124972928, 44.10624118365462],
-            [121.61368646673998, 44.101992702134]
-          ]
-        ],
-        "type": "Polygon"
-      }
-    };
+  /// 使用多边形作为GeoJSON
+  void _usePolygonAsGeoJson() {
+    if (widget.polygonGeoJson != null) {
+      setState(() {
+        _geoJsonController.text = widget.polygonGeoJson!;
+        _isFileLoaded = false;
+        _loadedFileName = null;
+      });
 
-    _geoJsonController.text = const JsonEncoder.withIndent('  ').convert(sampleGeoJSON);
+      widget.onUsePolygonAsGeoJson();
+      _showSuccessDialog('已将绘制区域设为搜索范围');
+    }
   }
 
   void _onSearch() {
@@ -126,7 +141,7 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
             ]
           };
         } else {
-          throw const FormatException('不支持的GeoJSON格式，请使用FeatureCollection、Feature或Geometry格式');
+          throw const FormatException('不支持的GeoJSON格式,请使用FeatureCollection、Feature或Geometry格式');
         }
 
         geoJson = json.encode(geojsonData);
@@ -156,7 +171,35 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('输入错误'),
+        title: const Row(
+          children: [
+            Icon(Icons.error, color: Colors.red),
+            SizedBox(width: 8),
+            Text('错误'),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSuccessDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green),
+            SizedBox(width: 8),
+            Text('成功'),
+          ],
+        ),
         content: Text(message),
         actions: [
           TextButton(
@@ -245,7 +288,6 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
         ),
 
         const SizedBox(height: 12),
-
         // Tab内容
         Expanded(
           child: TabBarView(
@@ -323,7 +365,7 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
                         _selectedDataTypes.remove(dataType);
                       }
                     } else {
-                      // 目前API只支持单选，清除其他选择
+                      // 目前API只支持单选,清除其他选择
                       _selectedDataTypes.clear();
                       _selectedDataTypes.add(dataType);
                     }
@@ -354,7 +396,7 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
           ),
           const SizedBox(height: 6),
           Text(
-            '* 目前支持单选，未来将支持多选',
+            '* 目前支持单选,未来将支持多选',
             style: TextStyle(
               fontSize: 10,
               color: Colors.grey.shade600,
@@ -475,7 +517,7 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
     );
   }
 
-  /// 紧凑的GeoJSON区域
+  /// GeoJSON区域 - 支持文件导入和地图打点
   Widget _buildGeoJsonSection() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -492,7 +534,7 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
               Icon(Icons.location_on, color: Colors.blue, size: 16),
               const SizedBox(width: 6),
               const Text(
-                'GeoJSON',
+                '搜索范围',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -500,68 +542,310 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
                 ),
               ),
               const Spacer(),
-              InkWell(
-                onTap: _fillSampleGeoJSON,
+              // 状态指示器
+              _buildStatusIndicator(),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // 操作按钮区域
+          _buildActionButtons(),
+
+          // 地图打点状态显示
+          if (widget.isPolygonMode || widget.polygonPointsCount > 0)
+            _buildPolygonStatus(),
+
+          // 显示当前加载的文件名
+          if (_isFileLoaded && _loadedFileName != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
                 borderRadius: BorderRadius.circular(4),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Colors.green.shade200),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.auto_fix_high, size: 12, color: Colors.green.shade700),
-                      const SizedBox(width: 3),
-                      Text(
-                        '示例',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.green.shade700,
-                          fontWeight: FontWeight.w500,
-                        ),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.attachment, size: 12, color: Colors.blue.shade700),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      '当前文件: $_loadedFileName',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.blue.shade700,
+                        fontWeight: FontWeight.w500,
                       ),
-                    ],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 8),
+
+          // 支持格式提示
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 12, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    '支持格式: 导入shp文件的压缩包 or 地图点击绘制',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 构建状态指示器
+  Widget _buildStatusIndicator() {
+    if (_isFileLoaded && _loadedFileName != null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.green.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.green.shade200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, size: 10, color: Colors.green.shade700),
+            const SizedBox(width: 3),
+            Text(
+              '已导入文件',
+              style: TextStyle(
+                fontSize: 9,
+                color: Colors.green.shade700,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (widget.hasValidPolygon) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.blue.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.blue.shade200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.edit_location, size: 10, color: Colors.blue.shade700),
+            const SizedBox(width: 3),
+            Text(
+              '已绘制区域',
+              style: TextStyle(
+                fontSize: 9,
+                color: Colors.blue.shade700,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (widget.isPolygonMode) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.orange.shade200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.orange.shade700),
+              ),
+            ),
+            const SizedBox(width: 3),
+            Text(
+              '绘制中',
+              style: TextStyle(
+                fontSize: 9,
+                color: Colors.orange.shade700,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  /// 构建操作按钮区域
+  Widget _buildActionButtons() {
+    return Column(
+      children: [
+
+        const SizedBox(height: 8),
+
+        // 地图绘制操作
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionButton(
+                icon: widget.isPolygonMode ? Icons.stop : Icons.edit_location,
+                label: widget.isPolygonMode ? '停止绘制' : '地图绘制',
+                color: widget.isPolygonMode ? Colors.red : Colors.purple,
+                onTap: widget.onTogglePolygonMode,
+              ),
+            ),
+            if (widget.polygonPointsCount > 0) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.refresh,
+                  label: '清除点',
+                  color: Colors.orange,
+                  onTap: widget.onClearPolygonPoints,
+                ),
+              ),
+            ],
+            if (widget.hasValidPolygon) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.check,
+                  label: '使用区域',
+                  color: Colors.teal,
+                  onTap: _usePolygonAsGeoJson,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// 构建多边形状态显示
+  Widget _buildPolygonStatus() {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: widget.isPolygonMode ? Colors.orange.shade50 : Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: widget.isPolygonMode ? Colors.orange.shade200 : Colors.blue.shade200,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                widget.isPolygonMode ? Icons.touch_app : Icons.check_circle,
+                size: 14,
+                color: widget.isPolygonMode ? Colors.orange.shade700 : Colors.blue.shade700,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                widget.isPolygonMode ? '地图绘制模式' : '已绘制区域',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: widget.isPolygonMode ? Colors.orange.shade700 : Colors.blue.shade700,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: widget.isPolygonMode ? Colors.orange.shade100 : Colors.blue.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${widget.polygonPointsCount} 个点',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: widget.isPolygonMode ? Colors.orange.shade800 : Colors.blue.shade800,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 80,
-            child: TextFormField(
-              controller: _geoJsonController,
-              maxLines: null,
-              expands: true,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 10,
-                height: 1.2,
-              ),
-              decoration: InputDecoration(
-                hintText: '输入GeoJSON数据...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: const BorderSide(color: Colors.blue),
-                ),
-                contentPadding: const EdgeInsets.all(8),
-                hintStyle: const TextStyle(fontSize: 11),
-                isDense: true,
-              ),
+          const SizedBox(height: 4),
+          Text(
+            widget.isPolygonMode
+                ? '点击地图添加点,3个点以上可形成搜索区域'
+                : widget.hasValidPolygon
+                ? '点击"使用区域"将绘制的多边形设为搜索范围'
+                : '需要至少3个点才能形成有效搜索区域',
+            style: TextStyle(
+              fontSize: 10,
+              color: widget.isPolygonMode ? Colors.orange.shade600 : Colors.blue.shade600,
+              height: 1.3,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 构建操作按钮
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: color,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -60,6 +60,11 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
   // 搜索边界
   Widget? _searchBoundaryLayer;
 
+  // 地图打点相关状态
+  List<LatLng> _polygonPoints = [];
+  bool _isPolygonMode = false;
+  Widget? _polygonLayer;
+
   @override
   void initState() {
     super.initState();
@@ -88,13 +93,11 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
   /// 计算面板尺寸
   void _calculatePanelDimensions() {
     final screenHeight = MediaQuery.of(context).size.height;
-    // 修复：不需要再计算底部导航栏高度，因为外层已经处理了
     final topPadding = MediaQuery.of(context).padding.top;
     final appBarHeight = AppBar().preferredSize.height;
     final availableHeight = screenHeight - topPadding - appBarHeight;
 
     setState(() {
-      // 面板最大高度为可用高度的 70%
       _maxPanelHeight = availableHeight * 0.7;
       if (_currentPanelHeight > _maxPanelHeight) {
         _currentPanelHeight = _maxPanelHeight;
@@ -135,7 +138,6 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
         _isPanelOpen = _currentPanelHeight > _minPanelHeight + 50;
       });
 
-      // 更新FAB动画状态
       if (_isPanelOpen) {
         _panelAnimationController.forward();
       } else {
@@ -145,9 +147,194 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
 
     controller.forward().then((_) {
       controller.dispose();
-      // 在动画结束时添加触觉反馈
       HapticFeedback.lightImpact();
     });
+  }
+
+  /// 切换多边形绘制模式
+  void _togglePolygonMode() {
+    setState(() {
+      _isPolygonMode = !_isPolygonMode;
+      if (!_isPolygonMode) {
+        // 退出多边形模式时不自动清除点，让用户选择
+      }
+    });
+
+    HapticFeedback.lightImpact();
+
+    if (_isPolygonMode) {
+      _showInfoSnackBar('双击地图添加点，3个点以上可形成搜索区域');
+    } else {
+      _showInfoSnackBar('已退出绘制模式');
+    }
+  }
+
+  /// 清除多边形点
+  void _clearPolygonPoints() {
+    setState(() {
+      _polygonPoints.clear();
+      _polygonLayer = null;
+    });
+    HapticFeedback.lightImpact();
+    _showInfoSnackBar('已清除所有绘制点');
+  }
+
+  /// 使用多边形作为GeoJSON
+  void _usePolygonAsGeoJson() {
+    final geoJson = _polygonPointsToGeoJson();
+    if (geoJson != null) {
+      // 这里需要传递给搜索面板，实际实现需要通过callback或状态管理
+      _showSuccessSnackBar('已将绘制区域设为搜索范围');
+    }
+  }
+
+  /// 处理地图双击事件 - 修改为处理所有点击类型
+  void _onMapTap(TapPosition tapPosition, LatLng point) {
+    if (!_isPolygonMode) {
+      // 非绘制模式下，点击关闭面板
+      if (_isPanelOpen) {
+        _closePanel();
+      }
+      return;
+    }
+
+    // 绘制模式下，添加点
+    setState(() {
+      _polygonPoints.add(point);
+      _updatePolygonLayer();
+    });
+
+    HapticFeedback.selectionClick();
+
+    if (_polygonPoints.length == 1) {
+      _showInfoSnackBar('已添加第1个点，继续点击添加更多点');
+    } else if (_polygonPoints.length == 2) {
+      _showInfoSnackBar('已添加第2个点，再添加1个点即可形成区域');
+    } else if (_polygonPoints.length >= 3) {
+      _showInfoSnackBar('已添加${_polygonPoints.length}个点，可以开始搜索了');
+    }
+  }
+
+  /// 更新多边形图层
+  void _updatePolygonLayer() {
+    if (_polygonPoints.isEmpty) {
+      _polygonLayer = null;
+      return;
+    }
+
+    final layers = <Widget>[];
+
+    // 添加点标记
+    final markers = <Marker>[];
+    for (int i = 0; i < _polygonPoints.length; i++) {
+      final point = _polygonPoints[i];
+      markers.add(
+        Marker(
+          point: point,
+          width: 28,
+          height: 28,
+          builder: (context) => GestureDetector(
+            onTap: () => _removePolygonPoint(i),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Text(
+                  '${i + 1}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    layers.add(MarkerLayer(markers: markers));
+
+    // 如果有3个或更多点，添加多边形
+    if (_polygonPoints.length >= 3) {
+      final polygons = [
+        Polygon(
+          points: [..._polygonPoints, _polygonPoints.first], // 闭合多边形
+          color: Colors.blue.withOpacity(0.2),
+          borderColor: Colors.blue,
+          borderStrokeWidth: 2,
+          isDotted: false,
+        ),
+      ];
+      layers.add(PolygonLayer(polygons: polygons));
+    } else if (_polygonPoints.length >= 2) {
+      // 如果只有2个点，显示连线
+      final polylines = [
+        Polyline(
+          points: _polygonPoints,
+          color: Colors.blue,
+          strokeWidth: 2,
+          isDotted: true,
+        ),
+      ];
+      layers.add(PolylineLayer(polylines: polylines));
+    }
+
+    _polygonLayer = Stack(children: layers);
+  }
+
+  /// 移除指定索引的多边形点
+  void _removePolygonPoint(int index) {
+    if (index >= 0 && index < _polygonPoints.length) {
+      setState(() {
+        _polygonPoints.removeAt(index);
+        _updatePolygonLayer();
+      });
+
+      HapticFeedback.lightImpact();
+      _showInfoSnackBar('已删除第${index + 1}个点');
+    }
+  }
+
+  /// 将多边形点转换为GeoJSON
+  String? _polygonPointsToGeoJson() {
+    if (_polygonPoints.length < 3) {
+      return null;
+    }
+
+    final coordinates = _polygonPoints.map((point) => [point.longitude, point.latitude]).toList();
+    coordinates.add([_polygonPoints.first.longitude, _polygonPoints.first.latitude]); // 闭合多边形
+
+    final geoJson = {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": {
+            "source": "manual_drawing",
+            "points_count": _polygonPoints.length,
+            "created_at": DateTime.now().toIso8601String(),
+          },
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [coordinates]
+          }
+        }
+      ]
+    };
+
+    return const JsonEncoder.withIndent('  ').convert(geoJson);
   }
 
   /// 执行影像搜索
@@ -195,7 +382,6 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
     try {
       final dynamic geoJsonData = json.decode(geoJsonString);
 
-      // 验证GeoJSON数据结构
       if (geoJsonData == null || geoJsonData is! Map<String, dynamic>) {
         return;
       }
@@ -215,18 +401,15 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
         _searchBoundaryLayer = boundaryLayer;
       });
 
-      // 调整地图视图到搜索边界
       final features = geoJsonMap['features'];
       if (features != null && features is List && features.isNotEmpty) {
         _fitMapToBounds(geoJsonMap);
       } else if (geoJsonMap['type'] == 'Feature' && geoJsonMap['geometry'] != null) {
-        // 处理单个Feature的情况
         _fitMapToBounds({
           'features': [geoJsonMap]
         });
       }
     } catch (e) {
-      // 静默处理错误，避免影响用户体验
       debugPrint('GeoJSON解析错误: $e');
     }
   }
@@ -286,7 +469,6 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
         ));
       }
     } catch (e) {
-      // 静默处理错误，避免影响用户体验
       debugPrint('边界计算错误: $e');
     }
   }
@@ -370,7 +552,6 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
       try {
         final footprintData = await SentinelSearchService.getImageFootprint(imageId, dataType);
 
-        // 根据数据类型设置边界颜色
         final borderColor = _getDataTypeColor(dataType);
 
         final boundaryLayer = GeoJsonLayer(
@@ -386,13 +567,11 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
         );
         layers.add(boundaryLayer);
       } catch (e) {
-        // 如果无法获取边界信息，只显示瓦片图层
         debugPrint('无法获取边界信息: $e');
       }
 
       return layers;
     } catch (e) {
-      // 如果是瓦片服务问题，尝试创建一个仅显示边界的图层
       if (e.toString().contains('瓦片') || e.toString().contains('URL')) {
         try {
           final footprintData = await SentinelSearchService.getImageFootprint(imageId, dataType);
@@ -596,6 +775,30 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
     );
   }
 
+  void _showInfoSnackBar(String message) {
+    final bottomMargin = _currentPanelHeight + MediaQuery.of(context).padding.bottom + 20;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.info, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.blueAccent,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(
+          bottom: bottomMargin,
+          left: 16,
+          right: 16,
+        ),
+      ),
+    );
+  }
+
   void _hideCurrentSnackBar() {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
   }
@@ -609,11 +812,11 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
           child: _buildMap(),
         ),
 
-        // 悬浮搜索按钮
+        // 绘制控制按钮组
         Positioned(
           top: 16,
           left: 16,
-          child: _buildSearchFab(),
+          child: _buildDrawingControls(),
         ),
 
         // 面板背景遮罩
@@ -637,22 +840,54 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
     );
   }
 
-  /// 构建搜索悬浮按钮
-  Widget _buildSearchFab() {
-    return FloatingActionButton(
-      onPressed: _togglePanel,
-      backgroundColor: Colors.blue,
-      foregroundColor: Colors.white,
-      elevation: 6,
-      child: AnimatedBuilder(
-        animation: _panelAnimation,
-        builder: (context, child) {
-          return Transform.rotate(
-            angle: _panelAnimation.value * 0.5,
-            child: Icon(_isPanelOpen ? Icons.close : Icons.search),
-          );
-        },
-      ),
+  /// 构建绘制控制按钮组
+  Widget _buildDrawingControls() {
+    return Column(
+      children: [
+        // 搜索按钮
+        FloatingActionButton(
+          onPressed: _togglePanel,
+          backgroundColor: Colors.blue,
+          foregroundColor: Colors.white,
+          elevation: 6,
+          heroTag: "search_fab",
+          child: AnimatedBuilder(
+            animation: _panelAnimation,
+            builder: (context, child) {
+              return Transform.rotate(
+                angle: _panelAnimation.value * 0.5,
+                child: Icon(_isPanelOpen ? Icons.close : Icons.search),
+              );
+            },
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // 多边形绘制按钮
+        FloatingActionButton(
+          onPressed: _togglePolygonMode,
+          backgroundColor: _isPolygonMode ? Colors.red : Colors.green,
+          foregroundColor: Colors.white,
+          elevation: 6,
+          heroTag: "polygon_fab",
+          child: Icon(_isPolygonMode ? Icons.stop : Icons.edit_location),
+        ),
+
+        // 如果在绘制模式且有点，显示清除按钮
+        if (_isPolygonMode && _polygonPoints.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          FloatingActionButton(
+            onPressed: _clearPolygonPoints,
+            backgroundColor: Colors.orange,
+            foregroundColor: Colors.white,
+            elevation: 6,
+            mini: true,
+            heroTag: "clear_fab",
+            child: const Icon(Icons.refresh),
+          ),
+        ],
+      ],
     );
   }
 
@@ -680,7 +915,6 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
             _isPanelOpen = _currentPanelHeight > _minPanelHeight + 50;
           });
 
-          // 更新FAB动画状态
           final progress = (_currentPanelHeight - _minPanelHeight) / (_maxPanelHeight - _minPanelHeight);
           _panelAnimationController.value = progress.clamp(0.0, 1.0);
 
@@ -689,20 +923,15 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
         onPanEnd: (details) {
           _isDragging = false;
 
-          // 根据拖拽速度和当前高度决定最终位置
           final velocity = details.velocity.pixelsPerSecond.dy;
 
           if (velocity.abs() > 500) {
-            // 快速拖拽，根据方向决定
             if (velocity < 0) {
-              // 向上快速拖拽，打开面板
               _animateToHeight(_maxPanelHeight);
             } else {
-              // 向下快速拖拽，关闭面板
               _animateToHeight(_minPanelHeight);
             }
           } else {
-            // 慢速拖拽，根据当前位置决定
             final midPoint = (_minPanelHeight + _maxPanelHeight) / 2;
             if (_currentPanelHeight > midPoint) {
               _animateToHeight(_maxPanelHeight);
@@ -728,10 +957,8 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
           ),
           child: Column(
             children: [
-              // 拖拽指示器和标题 - 始终可见
               _buildPanelHeader(),
 
-              // 可展开的内容区域
               if (_currentPanelHeight > _minPanelHeight + 20)
                 Expanded(
                   child: Opacity(
@@ -743,6 +970,14 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
                       onToggleImage: _toggleImageVisibility,
                       visibleImages: _visibleImages,
                       onClosePanel: () => _animateToHeight(_minPanelHeight),
+                      // 新增的地图打点相关参数
+                      onTogglePolygonMode: _togglePolygonMode,
+                      onClearPolygonPoints: _clearPolygonPoints,
+                      onUsePolygonAsGeoJson: _usePolygonAsGeoJson,
+                      isPolygonMode: _isPolygonMode,
+                      polygonPointsCount: _polygonPoints.length,
+                      hasValidPolygon: _polygonPoints.length >= 3,
+                      polygonGeoJson: _polygonPointsToGeoJson(),
                     ),
                   ),
                 ),
@@ -785,7 +1020,31 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
                   ),
                 ),
                 const Spacer(),
-                if (_searchResults.isNotEmpty)
+                // 绘制状态指示器
+                if (_isPolygonMode)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_location, size: 12, color: Colors.orange.shade700),
+                        const SizedBox(width: 4),
+                        Text(
+                          '绘制中',
+                          style: TextStyle(
+                            color: Colors.orange.shade700,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (_polygonPoints.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
@@ -793,14 +1052,30 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '${_searchResults.length} 个结果',
+                      '${_polygonPoints.length} 个点',
                       style: TextStyle(
                         color: Colors.blue.shade700,
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
                       ),
                     ),
-                  ),
+                  )
+                else if (_searchResults.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${_searchResults.length} 个结果',
+                        style: TextStyle(
+                          color: Colors.blue.shade700,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
                 const SizedBox(width: 8),
                 // 上下箭头指示器
                 Icon(
@@ -834,6 +1109,11 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
       layers.add(_searchBoundaryLayer!);
     }
 
+    // 添加多边形绘制图层
+    if (_polygonLayer != null) {
+      layers.add(_polygonLayer!);
+    }
+
     // 添加地图控制器
     layers.addAll([
       CustomZoomControls(mapController: _mapController),
@@ -850,8 +1130,8 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
         zoom: MapConfig.initialZoom,
         minZoom: MapConfig.minZoom,
         maxZoom: MapConfig.maxZoom,
-        // 禁用地图旋转
-        interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+        interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate & ~InteractiveFlag.doubleTapZoom,
+        onTap: _onMapTap, // 处理地图点击事件
       ),
       children: layers,
     );
@@ -904,7 +1184,6 @@ class GeoJsonLayer extends StatelessWidget {
         }
       }
     } catch (e) {
-      // 静默处理GeoJSON解析错误
       debugPrint('GeoJSON解析错误: $e');
     }
 
@@ -943,7 +1222,6 @@ class GeoJsonLayer extends StatelessWidget {
         );
       }
     } catch (e) {
-      // 静默处理多边形创建错误
       debugPrint('多边形创建错误: $e');
     }
     return null;

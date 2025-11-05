@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'http_service.dart';
 
 class RegisterService {
@@ -64,7 +63,6 @@ class RegisterService {
       );
 
       final data = HttpService.handleResponse(response);
-
       return VerificationCodeResult(
         success: true,
         message: data['message']?.toString() ?? '验证码已发送',

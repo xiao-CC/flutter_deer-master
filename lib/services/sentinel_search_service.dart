@@ -4,7 +4,7 @@ import '../sentinel/models/sentinel_search_models.dart';
 
 /// 卫星影像搜索服务
 class SentinelSearchService {
-  static const String baseUrl = 'http://39.103.98.255:6005/api/v1/satellite-search/';
+  static const String baseUrl = 'http://39.103.98.255:6002/api/search/satellite-search/';
 
   /// 搜索卫星影像
   static Future<SentinelApiResponse> searchImages(SentinelSearchParams params) async {
