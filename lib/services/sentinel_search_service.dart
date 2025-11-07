@@ -10,11 +10,7 @@ class SentinelSearchService {
   static Future<SentinelApiResponse> searchImages(SentinelSearchParams params) async {
     try {
       final uri = Uri.parse(baseUrl);
-
       final requestBody = json.encode(params.toJson());
-
-      print('搜索请求URL: $uri');
-      print('搜索请求体: $requestBody');
 
       final response = await http.post(
         uri,

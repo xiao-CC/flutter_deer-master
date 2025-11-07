@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:sp_util/sp_util.dart';
 
 import '../../services/sentinel_search_service.dart';
 import '../config/map_config.dart';
@@ -77,7 +78,6 @@ class _MobileEnhancedShowPageContentState extends State<MobileEnhancedShowPageCo
       parent: _panelAnimationController,
       curve: Curves.easeInOut,
     );
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _calculatePanelDimensions();
     });

@@ -51,6 +51,7 @@ dependencies:
   sprintf: ^7.0.0
   # 状态管理 https://github.com/rrousselGit/provider
   provider: ^6.1.2
+  shared_preferences: ^2.2.2
   # 扫码 https://github.com/juliuscanute/qr_code_scanner
   qr_code_scanner:
     git:
@@ -84,10 +85,9 @@ dependencies:
   flutter_launcher_icons: ^0.13.1
   file_picker: ^8.0.0+1
 
-# https://github.com/simplezhli/flutter_deer/issues/187
 dependency_overrides:
   scrollable_positioned_list: ^0.3.2
-
+  intl: ^0.18.1
 
 dev_dependencies:
   # Widget测试

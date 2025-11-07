@@ -1,10 +1,14 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../services/area_upload_service.dart';
+import '../../services/auth_service.dart';
 import '../models/sentinel_search_models.dart';
+import '../models/upload_area_model.dart';
 
 /// 移动端卫星影像搜索面板
 class MobileSentinelSearchPanel extends StatefulWidget {
@@ -14,6 +18,7 @@ class MobileSentinelSearchPanel extends StatefulWidget {
   final Function(SentinelSearchResult, int) onToggleImage;
   final Set<String> visibleImages;
   final VoidCallback onClosePanel;
+  final String? token;
 
   // 地图打点相关回调
   final VoidCallback onTogglePolygonMode;
@@ -40,6 +45,7 @@ class MobileSentinelSearchPanel extends StatefulWidget {
     required this.polygonPointsCount,
     required this.hasValidPolygon,
     this.polygonGeoJson,
+    this.token,
   });
 
   @override
@@ -49,6 +55,7 @@ class MobileSentinelSearchPanel extends StatefulWidget {
 class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
     with TickerProviderStateMixin {
   late final TabController _tabController;
+  late final AreaUploadService _uploadService;
 
   final _startDateController = TextEditingController();
   final _endDateController = TextEditingController();
@@ -64,12 +71,26 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
   // 文件导入相关状态
   String? _loadedFileName;
   bool _isFileLoaded = false;
+  bool _isUploading = false;
+  UploadAreaResponse? _uploadedArea;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    final String? token = widget.token ?? AuthService.getToken();
+    _uploadService = AreaUploadService(token: token);
     _updateDateControllers();
+  }
+
+  @override
+  void didUpdateWidget(MobileSentinelSearchPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    if (widget.token != oldWidget.token) {
+      final token = widget.token ?? AuthService.getToken();
+      _uploadService = AreaUploadService(token: token);
+    }
   }
 
   @override
@@ -94,10 +115,66 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
         _geoJsonController.text = widget.polygonGeoJson!;
         _isFileLoaded = false;
         _loadedFileName = null;
+        _uploadedArea = null;
       });
 
       widget.onUsePolygonAsGeoJson();
+
+      // 完成绘制后，退出绘制模式
+      if (widget.isPolygonMode) {
+        widget.onTogglePolygonMode();
+      }
       _showSuccessDialog('已将绘制区域设为搜索范围');
+    }
+  }
+
+  /// 导入压缩包文件
+  Future<void> _importZipFile() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['zip'],
+        withData: false,
+        withReadStream: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        final file = File(result.files.single.path!);
+        await _uploadFile(file);
+      }
+    } catch (e) {
+      _showErrorDialog('文件选择失败: ${e.toString()}');
+    }
+  }
+
+  /// 上传文件到服务器
+  Future<void> _uploadFile(File file) async {
+    setState(() {
+      _isUploading = true;
+    });
+
+    try {
+
+      final response = await _uploadService.uploadAreaFile(file: file);
+
+      setState(() {
+        _uploadedArea = response;
+        _geoJsonController.text = response.geojsonString;
+        _isFileLoaded = true;
+        _loadedFileName = response.filename;
+      });
+
+      _showSuccessDialog('文件上传成功!\n文件: ${response.filename}');
+    } on UploadServiceException catch (e) {
+      _showErrorDialog(e.message);
+    } catch (e) {
+      _showErrorDialog('上传失败: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
     }
   }
 
@@ -120,7 +197,7 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
       try {
         final parsedJson = json.decode(_geoJsonController.text.trim()) as Map<String, dynamic>;
 
-        // 确保转换为FeatureCollection格式
+        // 转换为FeatureCollection格式
         Map<String, dynamic> geojsonData;
         if (parsedJson['type'] == 'FeatureCollection') {
           geojsonData = parsedJson;
@@ -492,23 +569,16 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
               decoration: InputDecoration(
                 labelText: '最大云量(%)',
                 hintText: '0-100',
+                prefixIcon: const Icon(Icons.cloud_outlined, size: 18),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),
                   borderSide: BorderSide(color: Colors.grey.shade300),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),
-                  borderSide: const BorderSide(color: Colors.blue),
+                  borderSide: const BorderSide(color: Colors.blue, width: 1.5),
                 ),
-                prefixIcon: const Icon(Icons.percent, size: 16),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                isDense: true,
-                labelStyle: const TextStyle(fontSize: 12),
-                hintStyle: const TextStyle(fontSize: 12),
               ),
             ),
           ),
@@ -517,7 +587,7 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
     );
   }
 
-  /// GeoJSON区域 - 支持文件导入和地图打点
+  /// 搜索区域绘制
   Widget _buildGeoJsonSection() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -533,18 +603,27 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
             children: [
               Icon(Icons.location_on, color: Colors.blue, size: 16),
               const SizedBox(width: 6),
-              const Text(
-                '搜索范围',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+              const Expanded(
+                child: Text(
+                  '搜索范围',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
                 ),
               ),
-              const Spacer(),
               // 状态指示器
               _buildStatusIndicator(),
             ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '支持导入shp文件的压缩包 or 点击地图绘制',
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey.shade600,
+            ),
           ),
           const SizedBox(height: 8),
 
@@ -571,13 +650,13 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      '当前文件: $_loadedFileName',
+                      '当前区域: $_loadedFileName',
                       style: TextStyle(
                         fontSize: 10,
                         color: Colors.blue.shade700,
                         fontWeight: FontWeight.w500,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -586,31 +665,39 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
             ),
           ],
 
-          const SizedBox(height: 8),
-
-          // 支持格式提示
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, size: 12, color: Colors.grey.shade600),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    '支持格式: 导入shp文件的压缩包 or 地图点击绘制',
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: Colors.grey.shade600,
+          // 上传进度提示
+          if (_isUploading) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.orange.shade700),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Text(
+                    '正在上传文件...',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.orange.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -705,10 +792,23 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
   Widget _buildActionButtons() {
     return Column(
       children: [
+        // 第一行：导入文件按钮
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionButton(
+                icon: _isUploading ? Icons.hourglass_empty : Icons.file_upload,
+                label: _isUploading ? '上传中...' : '导入压缩包',
+                color: Colors.green,
+                onTap: _isUploading ? null : _importZipFile,
+              ),
+            ),
+          ],
+        ),
 
         const SizedBox(height: 8),
 
-        // 地图绘制操作
+        // 第二行：地图绘制操作
         Row(
           children: [
             Expanded(
@@ -716,7 +816,13 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
                 icon: widget.isPolygonMode ? Icons.stop : Icons.edit_location,
                 label: widget.isPolygonMode ? '停止绘制' : '地图绘制',
                 color: widget.isPolygonMode ? Colors.red : Colors.purple,
-                onTap: widget.onTogglePolygonMode,
+                onTap: () {
+                  // 如果当前不是绘制模式，开启绘制模式前先清空已有点
+                  if (!widget.isPolygonMode && widget.polygonPointsCount > 0) {
+                    widget.onClearPolygonPoints();
+                  }
+                  widget.onTogglePolygonMode();
+                },
               ),
             ),
             if (widget.polygonPointsCount > 0) ...[
@@ -814,34 +920,42 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
     );
   }
 
-  /// 构建操作按钮
   Widget _buildActionButton({
     required IconData icon,
     required String label,
     required Color color,
-    required VoidCallback onTap,
+    VoidCallback? onTap,
   }) {
+    final isDisabled = onTap == null;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(6),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: isDisabled ? Colors.grey.shade200 : color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(
+            color: isDisabled ? Colors.grey.shade300 : color.withOpacity(0.3),
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: color),
+            Icon(icon, color: isDisabled ? Colors.grey : color, size: 16),
             const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: color,
-                fontWeight: FontWeight.w500,
+            Flexible(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: isDisabled ? Colors.grey : color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -851,79 +965,62 @@ class _MobileSentinelSearchPanelState extends State<MobileSentinelSearchPanel>
   }
 
   Widget _buildDateField(String label, TextEditingController controller, VoidCallback onTap) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 11,
-            color: Colors.grey.shade600,
-          ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.grey.shade300),
         ),
-        const SizedBox(height: 4),
-        SizedBox(
-          height: 36,
-          child: TextFormField(
-            controller: controller,
-            readOnly: true,
-            onTap: onTap,
-            style: const TextStyle(fontSize: 12),
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: BorderSide(color: Colors.grey.shade300),
+        child: Row(
+          children: [
+            Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey.shade600),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                controller.text,
+                style: const TextStyle(fontSize: 12, color: Colors.black87),
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: Colors.blue),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              suffixIcon: const Icon(Icons.calendar_today, size: 14),
-              isDense: true,
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
   Widget _buildSearchButton() {
     return SizedBox(
       width: double.infinity,
-      height: 40,
+      height: 44,
       child: ElevatedButton(
         onPressed: widget.isLoading ? null : _onSearch,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.blue,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          elevation: widget.isLoading ? 0 : 1,
+          disabledBackgroundColor: Colors.grey.shade300,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          elevation: 0,
         ),
         child: widget.isLoading
-            ? const Row(
+            ? const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        )
+            : const Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            ),
-            SizedBox(width: 8),
-            Text('搜索中...', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            Icon(Icons.search, size: 18),
+            SizedBox(width: 6),
+            Text('开始搜索', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           ],
-        )
-            : const Text('搜索影像', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        ),
       ),
     );
   }

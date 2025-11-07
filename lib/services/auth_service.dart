@@ -21,13 +21,13 @@ class AuthService {
       final response = await HttpService.post(
         loginEndpoint,
         body: requestBody,
-        requireAuth: false, // 登录请求不需要token
+        requireAuth: false,
       );
 
       final data = HttpService.handleResponse(response);
 
       // 安全地保存JWT token
-      final token = data['token'];
+      final token = data['data']['access_token'];
       if (token != null) {
         await SpUtil.putString('jwt_token', token.toString());
       }
@@ -37,7 +37,7 @@ class AuthService {
       if (userInfo != null) {
         await SpUtil.putString('user_info', json.encode(userInfo));
       }
-
+      
       return LoginResult(
         success: true,
         message: data['message']?.toString() ?? '登录成功',
