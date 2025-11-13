@@ -2,21 +2,24 @@ import 'dart:convert';
 
 /// 上传区域响应模型
 class UploadAreaResponse {
-  final String filename;  // 文件名（用于显示）
-  final Map<String, dynamic> geojsonData;  // GeoJSON 数据（业务核心）
+  final String filename;
+  final String id;
+  final Map<String, dynamic> geojsonData;
 
   UploadAreaResponse({
     required this.filename,
+    required this.id,
     required this.geojsonData,
   });
 
   /// 从 JSON 创建实例
   factory UploadAreaResponse.fromJson(
       Map<String, dynamic> json,
-      String filename,  // 从外部传入文件名
+      String filename,
       ) {
     return UploadAreaResponse(
       filename: filename,
+      id: json['id'].toString(),
       geojsonData: json['geojson_data'] as Map<String, dynamic>,
     );
   }
@@ -25,6 +28,7 @@ class UploadAreaResponse {
   Map<String, dynamic> toJson() {
     return {
       'filename': filename,
+      'id': id,
       'geojson_data': geojsonData,
     };
   }

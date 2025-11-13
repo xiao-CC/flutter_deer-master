@@ -133,7 +133,6 @@ class AreaUploadService {
     // 检查状态码
     if (response.statusCode != 200 && response.statusCode != 201) {
       String errorMessage = '服务器返回错误';
-      print('响应体：${response.body}');
       try {
         final errorData = json.decode(response.body);
         if (errorData is Map && errorData.containsKey('message')) {
@@ -142,7 +141,6 @@ class AreaUploadService {
           errorMessage = errorData['error'] as String;
         }
       } catch (_) {
-        // 如果无法解析错误响应，使用默认消息
         errorMessage = response.body.isNotEmpty
             ? response.body
             : '服务器返回错误';
@@ -198,4 +196,8 @@ class AreaUploadService {
 
   /// 获取上传端点（用于调试）
   String get uploadEndpoint => '$_baseUrl$_uploadEndpoint';
+
+  String getId(UploadAreaResponse response) {
+    return response.id;
+  }
 }

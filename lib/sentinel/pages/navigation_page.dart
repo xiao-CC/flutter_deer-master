@@ -83,13 +83,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
       if (!_loadedPages.contains(index)) {
         _pages[index] = _buildPageContent(index);
         _loadedPages.add(index);
-
-        // 如果是地图页面，添加调试信息
-        if (index == 1) {
-          debugPrint('地图页面首次加载: ${DateTime.now()}');
-        }
       }
-
       _currentIndex = index;
     });
   }
@@ -99,7 +93,6 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
       case 0:
         return const HomePage();
       case 1:
-        debugPrint('创建地图页面组件');
         return const MobileEnhancedShowPageContent();
       case 2:
         return const ProfilePage();

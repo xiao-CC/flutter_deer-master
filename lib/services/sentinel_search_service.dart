@@ -26,9 +26,6 @@ class SentinelSearchService {
         },
       );
 
-      print('响应状态码: ${response.statusCode}');
-      print('响应体: ${response.body}');
-
       if (response.statusCode == 200) {
         final jsonData = json.decode(response.body) as Map<String, dynamic>;
         return SentinelApiResponse.fromJson(jsonData);
